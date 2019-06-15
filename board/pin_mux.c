@@ -53,6 +53,8 @@ void BOARD_InitPins(void)
     CLOCK_EnableClock(kCLOCK_PortB);
     /* Port D Clock Gate Control: Clock enabled */
     CLOCK_EnableClock(kCLOCK_PortD);
+    /* Port B Clock Gate Control */
+    CLOCK_EnableClock(kCLOCK_PortB);
 
     /* PORTB16 (pin E10) is configured as UART0_RX */
     PORT_SetPinMux(PORTB, 16U, kPORT_MuxAlt3);
@@ -78,6 +80,16 @@ void BOARD_InitPins(void)
 
                   /* UART 0 transmit data source select: UART0_TX pin. */
                   | SIM_SOPT5_UART0TXSRC(SOPT5_UART0TXSRC_UART_TX));
+
+    // data D6, alt 7
+    // clock B11 alt 2
+   PORT_SetPinMux(PORTD, 6U, kPORT_MuxAlt7); // SPI1 Data
+   PORT_SetPinMux(PORTB, 11U, kPORT_MuxAlt2); // SPI1 Clock
+
+    //PTD12 clk, PTD Data, alt 2
+   PORT_SetPinMux(PORTD, 12U, kPORT_MuxAlt2); //SPI2 clock
+   PORT_SetPinMux(PORTD, 13U, kPORT_MuxAlt2);
+
 }
 /***********************************************************************************************************************
  * EOF

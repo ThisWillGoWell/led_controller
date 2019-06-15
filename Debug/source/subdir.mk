@@ -4,16 +4,16 @@
 
 # Add inputs and outputs from these tool invocations to the build variables 
 C_SRCS += \
-../source/dspi_edma_b2b_transfer_master.c \
-../source/semihost_hardfault.c 
+../source/semihost_hardfault.c \
+../source/wall.c 
 
 OBJS += \
-./source/dspi_edma_b2b_transfer_master.o \
-./source/semihost_hardfault.o 
+./source/semihost_hardfault.o \
+./source/wall.o 
 
 C_DEPS += \
-./source/dspi_edma_b2b_transfer_master.d \
-./source/semihost_hardfault.d 
+./source/semihost_hardfault.d \
+./source/wall.d 
 
 
 # Each subdirectory must supply rules for building sources it contributes

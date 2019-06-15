@@ -31,25 +31,25 @@ endif
 # Add inputs and outputs from these tool invocations to the build variables 
 
 # All Target
-all: frdmk66f_dspi_edma_b2b_transfer_master.axf
+all: led_wall.axf
 
 # Tool invocations
-frdmk66f_dspi_edma_b2b_transfer_master.axf: $(OBJS) $(USER_OBJS)
+led_wall.axf: $(OBJS) $(USER_OBJS)
 	@echo 'Building target: $@'
 	@echo 'Invoking: MCU Linker'
-	arm-none-eabi-gcc -nostdlib -Xlinker -Map="frdmk66f_dspi_edma_b2b_transfer_master.map" -Xlinker --gc-sections -Xlinker -print-memory-usage -Xlinker --sort-section=alignment -Xlinker --cref -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -T frdmk66f_dspi_edma_b2b_transfer_master_Debug.ld -o "frdmk66f_dspi_edma_b2b_transfer_master.axf" $(OBJS) $(USER_OBJS) $(LIBS)
+	arm-none-eabi-gcc -nostdlib -Xlinker -Map="led_wall.map" -Xlinker --gc-sections -Xlinker -print-memory-usage -Xlinker --sort-section=alignment -Xlinker --cref -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -T "led_wall_Debug.ld" -o "led_wall.axf" $(OBJS) $(USER_OBJS) $(LIBS)
 	@echo 'Finished building target: $@'
 	@echo ' '
 	$(MAKE) --no-print-directory post-build
 
 # Other Targets
 clean:
-	-$(RM) $(EXECUTABLES)$(OBJS)$(C_DEPS) frdmk66f_dspi_edma_b2b_transfer_master.axf
+	-$(RM) $(EXECUTABLES)$(OBJS)$(C_DEPS) led_wall.axf
 	-@echo ' '
 
 post-build:
 	-@echo 'Performing post-build steps'
-	-arm-none-eabi-size "frdmk66f_dspi_edma_b2b_transfer_master.axf"; # arm-none-eabi-objcopy -v -O binary "frdmk66f_dspi_edma_b2b_transfer_master.axf" "frdmk66f_dspi_edma_b2b_transfer_master.bin" ; # checksum -p MK66FN2M0xxx18 -d "frdmk66f_dspi_edma_b2b_transfer_master.bin";
+	-arm-none-eabi-size "led_wall.axf"; # arm-none-eabi-objcopy -v -O binary "led_wall.axf" "led_wall.bin" ; # checksum -p MK66FN2M0xxx18 -d "led_wall.bin";
 	-@echo ' '
 
 .PHONY: all clean dependents post-build
