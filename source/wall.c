@@ -16,12 +16,18 @@
 
 #include "pin_mux.h"
 #include "clock_config.h"
+#include "colors.h"
+
 /*******************************************************************************
  * Definitions
  ******************************************************************************/
-#define NUM_LEDS 1800U
-#define END_BYTES 75
+
+#define NUM_LEDS_PER_BUS 1800U
+#define END_BYTES 100
 #define BRIGHTNESS 0xFF
+
+#define NUM_LEDS NUM_LEDS_PER_BUS * 3
+
 /*******************************************************************************
  * Perf Definitions
  ******************************************************************************/
@@ -31,8 +37,8 @@
 
 #define DSPIn_MASTER_PCS_FOR_INIT kDSPI_Pcs0
 #define DSPI_MASTER_PCS_FOR_TRANSFER kDSPI_MasterPcs0
-#define TRANSFER_SIZE NUM_LEDS * 4 + 4 + END_BYTES /* Transfer dataSize */
-#define TRANSFER_BAUDRATE 2000000U /* Transfer baudrate - 500k */
+#define TRANSFER_SIZE NUM_LEDS_PER_BUS * 4 + 4 + END_BYTES /* Transfer dataSize */
+#define TRANSFER_BAUDRATE 1400000U /* Transfer baudrate - 14.5MHz */
 
 #define DSPI0_MASTER_CLK_SRC DSPI0_CLK_SRC
 #define DSPI0_MASTER_CLK_FREQ CLOCK_GetFreq(DSPI0_CLK_SRC)
@@ -60,17 +66,14 @@
 void DSPI0_Callback(SPI_Type *base, dspi_master_edma_handle_t *handle, status_t status, void *userData);
 void DSPI1_Callback(SPI_Type *base, dspi_master_edma_handle_t *handle, status_t status, void *userData);
 void DSPI2_Callback(SPI_Type *base, dspi_master_edma_handle_t *handle, status_t status, void *userData);
+
 /******************************************************************************
- * Variables
+ * DSPI Variables
  ******************************************************************************/
-uint8_t masterRxData[TRANSFER_SIZE] = {0};
-uint8_t masterTxData[TRANSFER_SIZE] = {0};
 
 dspi_master_edma_handle_t g_dspi0_edma_m_handle;
 dspi_master_edma_handle_t g_dspi1_edma_m_handle;
 dspi_master_edma_handle_t g_dspi2_edma_m_handle;
-
-
 
 edma_handle_t dspiEdmaMasterRxRegToRxDataHandle;
 edma_handle_t dspiEdmaMasterTxDataToIntermediaryHandle;
@@ -84,39 +87,57 @@ edma_handle_t dspi2EdmaMasterRxRegToRxDataHandle;
 edma_handle_t dspi2EdmaMasterTxDataToIntermediaryHandle;
 edma_handle_t dspi2EdmaMasterIntermediaryToTxRegHandle;
 
-volatile bool isTransferCompleted = false;
+// DSPI transfer objects
+dspi_transfer_t spi0Xfer;
+dspi_transfer_t spi1Xfer;
+dspi_transfer_t spi2Xfer;
+
 volatile uint32_t g_systickCounter;
 
 /*******************************************************************************
  * Code
  ******************************************************************************/
 
-uint8_t leds[TRANSFER_SIZE] = {0};
-dspi_transfer_t masterXfer;
+uint8_t leds0[TRANSFER_SIZE] = {0};
+uint8_t leds1[TRANSFER_SIZE] = {0};
+uint8_t leds2[TRANSFER_SIZE] = {0};
+
+uint8_t gamma[256] = {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+						0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+						1, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 4, 4,
+						4, 4, 4, 5, 5, 5, 5, 6, 6, 6, 6, 7, 7, 7, 7, 8,
+						8, 8, 9, 9, 9, 10, 10, 10, 11, 11, 12, 12, 12, 13, 13, 14,
+						14, 15, 15, 15, 16, 16, 17, 17, 18, 18, 19, 19, 20, 20, 21, 22,
+						22, 23, 23, 24, 25, 25, 26, 26, 27, 28, 28, 29, 30, 30, 31, 32,
+						33, 33, 34, 35, 36, 36, 37, 38, 39, 40, 40, 41, 42, 43, 44, 45,
+						46, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60,
+						61, 62, 63, 64, 65, 67, 68, 69, 70, 71, 72, 73, 75, 76, 77, 78,
+						80, 81, 82, 83, 85, 86, 87, 89, 90, 91, 93, 94, 95, 97, 98, 99,
+						101, 102, 104, 105, 107, 108, 110, 111, 113, 114, 116, 117, 119, 121, 122, 124,
+						125, 127, 129, 130, 132, 134, 135, 137, 139, 141, 142, 144, 146, 148, 150, 151,
+						153, 155, 157, 159, 161, 163, 165, 166, 168, 170, 172, 174, 176, 178, 180, 182,
+						184, 186, 189, 191, 193, 195, 197, 199, 201, 204, 206, 208, 210, 212, 215, 217,
+						219, 221, 224, 226, 228, 231, 233, 235, 238, 240, 243, 245, 248, 250, 253, 255
+					};
+
+
 
 int write_counter=0;
-
-void setLed(int i,uint8_t r, uint8_t g, uint8_t b){
-	leds[4 + i * 4 + 1] = b;
-	leds[4 + i * 4 + 2] = g;
-	leds[4 + i * 4 + 3] = r;
-}
 
 
 void DSPI0_Callback(SPI_Type *base, dspi_master_edma_handle_t *handle, status_t status, void *userData)
 {
-	DSPI_MasterTransferEDMA(DSPI0_MASTER_BASEADDR, &g_dspi0_edma_m_handle, &masterXfer);
+	DSPI_MasterTransferEDMA(DSPI0_MASTER_BASEADDR, &g_dspi0_edma_m_handle, &spi0Xfer);
 }
 
 void DSPI1_Callback(SPI_Type *base, dspi_master_edma_handle_t *handle, status_t status, void *userData)
 {
-
-	DSPI_MasterTransferEDMA(DSPI1_MASTER_BASEADDR, &g_dspi1_edma_m_handle, &masterXfer);
+	DSPI_MasterTransferEDMA(DSPI1_MASTER_BASEADDR, &g_dspi1_edma_m_handle, &spi1Xfer);
 }
 
 void DSPI2_Callback(SPI_Type *base, dspi_master_edma_handle_t *handle, status_t status, void *userData)
 {
-	DSPI_MasterTransferEDMA(DSPI2_MASTER_BASEADDR, &g_dspi2_edma_m_handle, &masterXfer);
+	DSPI_MasterTransferEDMA(DSPI2_MASTER_BASEADDR, &g_dspi2_edma_m_handle, &spi2Xfer);
 }
 
 
@@ -149,6 +170,7 @@ void edmaSpiInit(){
 	    uint32_t DSPI0TxChannel,DSPI0RxChannel, DSPI0IntermediaryChannel;
 		uint32_t DSPI1TxChannel, DSPI1RxChannel, DSPI1IntermediaryChannel;
 		uint32_t DSPI2TxChannel, DSPI2RxChannel, DSPI2IntermediaryChannel;
+
 		DSPI0TxChannel = 1U;
 		DSPI0IntermediaryChannel = 2U;
 		DSPI0RxChannel = 0U;
@@ -163,6 +185,7 @@ void edmaSpiInit(){
 
 
 	    DMAMUX_Init(DMA_MUX_BASEADDR);
+
 	    // enable DMA channels
 	    // SPI0 Source
 		// SPI0 Rx
@@ -175,11 +198,11 @@ void edmaSpiInit(){
 	    DMAMUX_EnableChannel(DMA_MUX_BASEADDR, DSPI0TxChannel);
 
 	    // SPI1 Source
-	    // SPI0 Rx
+	    // SPI1 Rx
 	    DMAMUX_SetSource(DMA_MUX_BASEADDR, DSPI1RxChannel,
 	    	                     (uint8_t)DSPI1_MASTER_DMA_RX_REQUEST_SOURCE);
-		DMAMUX_EnableChannel(DMA_MUX_BASEADDR, DSPI0RxChannel);
-		//SPI0Tx
+		DMAMUX_EnableChannel(DMA_MUX_BASEADDR, DSPI1RxChannel);
+		//SPI1Tx
 	    DMAMUX_SetSource(DMA_MUX_BASEADDR, DSPI1TxChannel,
 	   	                     (uint8_t)DSPI1_MASTER_DMA_TX_REQUEST_SOURCE);
 		DMAMUX_EnableChannel(DMA_MUX_BASEADDR, DSPI1TxChannel);
@@ -222,7 +245,7 @@ void edmaSpiInit(){
 	    masterConfig.ctarConfig.direction = kDSPI_MsbFirst;
 	    masterConfig.ctarConfig.pcsToSckDelayInNanoSec = 1000000000U / TRANSFER_BAUDRATE;
 	    masterConfig.ctarConfig.lastSckToPcsDelayInNanoSec = 1000000000U / TRANSFER_BAUDRATE;
-	    masterConfig.ctarConfig.betweenTransferDelayInNanoSec =  1000000000U / TRANSFER_BAUDRATE;
+	    masterConfig.ctarConfig.betweenTransferDelayInNanoSec = 0;// 1000000000U / TRANSFER_BAUDRATE;
 	    masterConfig.whichPcs = DSPIn_MASTER_PCS_FOR_INIT;
 	    masterConfig.pcsActiveHighOrLow = kDSPI_PcsActiveLow;
 	    masterConfig.enableContinuousSCK = false;
@@ -235,6 +258,7 @@ void edmaSpiInit(){
 	    DSPI_MasterInit(DSPI0_MASTER_BASEADDR, &masterConfig, srcClock_Hz);
 	    DSPI_MasterInit(DSPI1_MASTER_BASEADDR, &masterConfig, srcClock_Hz);
 	    DSPI_MasterInit(DSPI2_MASTER_BASEADDR, &masterConfig, srcClock_Hz);
+
 
 	    // configure DataHandle
 	    // SPI0 RX
@@ -289,7 +313,77 @@ void edmaSpiInit(){
 											NULL, &dspi2EdmaMasterRxRegToRxDataHandle,
 											&dspi2EdmaMasterTxDataToIntermediaryHandle,
 											&dspi2EdmaMasterIntermediaryToTxRegHandle);
+		// init transfer objects
+		spi0Xfer.txData = leds0;
+		spi0Xfer.rxData = NULL;
+		spi0Xfer.dataSize = TRANSFER_SIZE;
+		spi0Xfer.configFlags = kDSPI_MasterCtar0 | DSPI_MASTER_PCS_FOR_TRANSFER | kDSPI_MasterPcsContinuous;
 
+		spi1Xfer.txData = leds1;
+		spi1Xfer.rxData = NULL;
+		spi1Xfer.dataSize = TRANSFER_SIZE;
+		spi1Xfer.configFlags = kDSPI_MasterCtar0 | DSPI_MASTER_PCS_FOR_TRANSFER | kDSPI_MasterPcsContinuous;
+
+
+	    spi2Xfer.txData = leds2;
+		spi2Xfer.rxData = NULL;
+		spi2Xfer.dataSize = TRANSFER_SIZE;
+		spi2Xfer.configFlags = kDSPI_MasterCtar0 | DSPI_MASTER_PCS_FOR_TRANSFER | kDSPI_MasterPcsContinuous;
+
+}
+
+
+
+void setLed(int i,uint8_t r, uint8_t g, uint8_t b){
+
+	int index = 4 + (i % NUM_LEDS_PER_BUS) * 4;
+	switch(i / NUM_LEDS_PER_BUS){
+	case 0:
+		leds0[index + 1] = gamma[b];
+		leds0[index + 2] = gamma[g];
+		leds0[index + 3] = gamma[r];
+		break;
+	case 1:
+		leds1[index + 1] = gamma[b];
+		leds1[index + 2] = gamma[g];
+		leds1[index + 3] = gamma[r];
+		break;
+	case 2:
+		leds2[index + 1] = gamma[b];
+		leds2[index + 2] = gamma[g];
+		leds2[index + 3] = gamma[r];
+		break;
+	}
+}
+
+void rainbowShift(){
+	int deltaHue = 1;
+	HsvColor startHue, currentHue;
+	startHue.v = 100;
+	startHue.s = 255;
+	startHue.h = 0;
+
+	currentHue.v = startHue.v;
+	currentHue.s = startHue.s;
+	currentHue.h = startHue.h;
+
+
+	while(1){
+		RgbColor color;
+		currentHue.v = startHue.v;
+		currentHue.s = startHue.s;
+		currentHue.h = startHue.h;
+
+		for(int i=0;i<NUM_LEDS;i++){
+			color = HsvToRgb(currentHue);
+			setLed(i, color.r, color.g, color.b);
+			currentHue.h += deltaHue;
+		}
+		startHue.h += deltaHue;
+
+
+		SysTick_DelayTicks(10U);
+	}
 }
 
 
@@ -299,9 +393,7 @@ int main(void)
     BOARD_BootClockRUN();
     BOARD_InitDebugConsole();
     edmaSpiInit();
-    uint32_t errorCount;
     uint32_t loopCount = 1U;
-    uint32_t i;
 
     gpio_pin_config_t output_config = {
 		kGPIO_DigitalOutput, 0,
@@ -324,92 +416,73 @@ int main(void)
 		}
 	}
 
-
-    for(int i=0;i<NUM_LEDS;i++){
-    	leds[4+i*4] = BRIGHTNESS;
+	// set the global brightness of each bus
+    for(int i=0;i<NUM_LEDS_PER_BUS;i++){
+    	leds0[4+i*4] = BRIGHTNESS;
+    	leds1[4+i*4] = BRIGHTNESS;
+    	leds2[4+i*4] = BRIGHTNESS;
     }
+
+    // initlize the end frame for each bus
     for(int i=TRANSFER_SIZE-1; i > TRANSFER_SIZE - END_BYTES-1; i--){
-    	leds[i]=0xFF;
+    	  leds0[i]=0xFF;
+    	leds1[i]=0xFF;
+    	leds2[i]=0xFF;
     }
-    masterXfer.txData = leds;
-	masterXfer.rxData = NULL;
-	masterXfer.dataSize = TRANSFER_SIZE;
-	masterXfer.configFlags = kDSPI_MasterCtar0 | DSPI_MASTER_PCS_FOR_TRANSFER | kDSPI_MasterPcsContinuous;
 
-	if (kStatus_Success != DSPI_MasterTransferEDMA(DSPI0_MASTER_BASEADDR, &g_dspi0_edma_m_handle, &masterXfer))
+	if (kStatus_Success != DSPI_MasterTransferEDMA(DSPI0_MASTER_BASEADDR, &g_dspi0_edma_m_handle, &spi0Xfer))
 
 	{
 		PRINTF("There is error when start DSPI_MasterTransferEDMA \r\n ");
 	}
-	if (kStatus_Success != DSPI_MasterTransferEDMA(DSPI1_MASTER_BASEADDR, &g_dspi1_edma_m_handle, &masterXfer))
+	if (kStatus_Success != DSPI_MasterTransferEDMA(DSPI1_MASTER_BASEADDR, &g_dspi1_edma_m_handle, &spi1Xfer))
 	{
 		PRINTF("There is error when start DSPI_MasterTransferEDMA \r\n ");
 	}
 
-	if (kStatus_Success != DSPI_MasterTransferEDMA(DSPI2_MASTER_BASEADDR, &g_dspi2_edma_m_handle, &masterXfer))
+	if (kStatus_Success != DSPI_MasterTransferEDMA(DSPI2_MASTER_BASEADDR, &g_dspi2_edma_m_handle, &spi2Xfer))
 	{
 		PRINTF("There is error when start DSPI_MasterTransferEDMA \r\n ");
 	}
+
+	rainbowShift();
 
     while(1){
 
-		for(int color=0;color<3;color++){
-			 for(loopCount=0;loopCount<NUM_LEDS;loopCount++)
-			 {
-				switch(color){
-				case 0:
-					setLed(loopCount % NUM_LEDS, 100,0,0);
-					break;
-				case 1:
-					setLed(loopCount % NUM_LEDS, 0,100,0);
-					break;
-				case 2:
-					setLed(loopCount % NUM_LEDS, 0,0,100);
-					break;
-				}
-
-				/* Delay 10 ms */
-				SysTick_DelayTicks(10U);
-
-//				isTransferCompleted = false;
-
-
-				/* Wait until transfer completed */
-//				while (!isTransferCompleted)
-//				{
-//				}
-
-				/* Delay to wait slave is ready */
-
-
+    	for(int value =0; value < 200; value ++){
+    		int newValue = value;
+			if(value > 100){
+				newValue = 100 - (value - 100);
 			}
-		 }
+
+    		for(int led=0; led<NUM_LEDS;led++){
+    			setLed(led, newValue, newValue, 0);
+    		}
+    		SysTick_DelayTicks(10U); //delay 10 ms
+    	}
+
+//		for(int color=0;color<3;color++){
+//			 for(loopCount=0;loopCount<NUM_LEDS;loopCount++)
+//			 {
+//				switch(color){
+//				case 0:
+//					setLed(loopCount, 100,0,0);
+//					break;
+//				case 1:
+//					setLed(loopCount, 0,100,0);
+//					break;
+//				case 2:
+//					setLed(loopCount, 0,0,100);
+//					break;
+//				}
+//
+//
+//SysTick_DelayTicks(10U); //delay 10 ms
+//
+//			}
+//		 }
 	}
 
-
-//        /* Set up the transfer data */
-//        for (i = 0U; i < TRANSFER_SIZE; i++)
-//        {
-//
-//            masterTxData[i] = (i + loopCount) % 256U;
-//            masterRxData[i] = 0U;
-//        }
-
-//        /* Print out transmit buffer */
-//        PRINTF("\r\n Master transmit:\r\n");
-//        for (i = 0; i < TRANSFER_SIZE; i++)
-//        {
-//            /* Print 16 numbers in a line */
-//            if ((i & 0x0FU) == 0U)
-//            {
-//                PRINTF("\r\n");
-//            }
-//            PRINTF(" %02X", masterTxData[i]);
-//        }
-//        PRINTF("\r\n");
-
-        /* Start master transfer, send data to slave */
-
-
 }
+
 

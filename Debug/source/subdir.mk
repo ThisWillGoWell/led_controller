@@ -4,14 +4,17 @@
 
 # Add inputs and outputs from these tool invocations to the build variables 
 C_SRCS += \
+../source/colors.c \
 ../source/semihost_hardfault.c \
 ../source/wall.c 
 
 OBJS += \
+./source/colors.o \
 ./source/semihost_hardfault.o \
 ./source/wall.o 
 
 C_DEPS += \
+./source/colors.d \
 ./source/semihost_hardfault.d \
 ./source/wall.d 
 
