@@ -5,18 +5,27 @@
 # Add inputs and outputs from these tool invocations to the build variables 
 C_SRCS += \
 ../source/colors.c \
+../source/main.c \
+../source/pattern.c \
+../source/perfs.c \
 ../source/semihost_hardfault.c \
-../source/wall.c 
+../source/utils.c 
 
 OBJS += \
 ./source/colors.o \
+./source/main.o \
+./source/pattern.o \
+./source/perfs.o \
 ./source/semihost_hardfault.o \
-./source/wall.o 
+./source/utils.o 
 
 C_DEPS += \
 ./source/colors.d \
+./source/main.d \
+./source/pattern.d \
+./source/perfs.d \
 ./source/semihost_hardfault.d \
-./source/wall.d 
+./source/utils.d 
 
 
 # Each subdirectory must supply rules for building sources it contributes
