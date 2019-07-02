@@ -12,6 +12,13 @@
 #include "utils.h"
 #include "clock_config.h"
 
+#define DELAY 10U
+#define UPDATES_PER_SECOND 1000U / DELAY
+#define AUDIO_DELAY 0.5
+
+#define AUDIO_DELAY_BUFFER_LEN 1
+
+
 /*****************************************************************************
  * Helper Prototypes
 *****************************************************************************/
@@ -25,6 +32,7 @@ void rainbowPattern(uint32_t count);
 void fade(uint32_t count );
 void randomLight(uint32_t count);
 void spectrumBrightness(uint32_t counter);
+void secondTrySpectrum(uint32_t counter);
 
 uint32_t currentDelay;
 uint8_t brightness;
@@ -115,27 +123,35 @@ void rainbowPattern( uint32_t count){
 	}
 }
 
+uint32_t currentSpectrum[7] = {0};
 uint32_t enhansedSpectrum[13] = {0};
 uint32_t currentEnhansedSpectrum[13] = {0};
 
 uint32_t currentValue = 0;
 HsvColor currentHsv;
 int currentIndex;
+
+int currentBufferIndex = 0;
+
+uint32_t spectrumBuffer[AUDIO_DELAY_BUFFER_LEN][7];
+
 void spectrumBrightnessCallback(uint32_t spectrum[]){
 
 	int i;
 	uint32_t decay;
 	for(i = 0; i<6;i++){
-		if(spectrum[i] < 800){
-			spectrum[i] = 0;
+		if(spectrumBuffer[currentBufferIndex] [i] < 800){
+			spectrumBuffer[currentBufferIndex] [i] = 0;
 		}
-		enhansedSpectrum[i*2]= spectrum[i];
-		enhansedSpectrum[i*2+1] = spectrum[i]/2 ;
+		enhansedSpectrum[i*2]= spectrumBuffer[currentBufferIndex] [i];
+		enhansedSpectrum[i*2+1] = spectrumBuffer[currentBufferIndex] [i]/2 ;
 		if(i != 0){
-			enhansedSpectrum[i*2-1] += spectrum[i]/2;
+			enhansedSpectrum[i*2-1] += spectrumBuffer[currentBufferIndex] [i]/2;
 		}
-
+		spectrumBuffer[currentBufferIndex][i] = spectrum[i];
 	}
+	currentBufferIndex = (currentBufferIndex + 1) % AUDIO_DELAY_BUFFER_LEN;
+
 	hsv.s = 255;
 	for(i=0; i<13;i++){
 		if(enhansedSpectrum[i] > currentEnhansedSpectrum[i]){
@@ -155,25 +171,21 @@ void spectrumBrightnessCallback(uint32_t spectrum[]){
 		}
 		//hsv.v = currentEnhansedSpectrum[i] >> 4U;
 
-		currentIndex = 35 + i * 5 + 2;
+		currentIndex = 100 + i * 7 + 2;
 		hsv.v = currentEnhansedSpectrum[i] >> 4U; // spectrum is 0-4095, so to map it to 0-255 shift it over 4 (divide by 16)
-//		if(hsv.v < currentLedsHsv[currentIndex].v){
-//			hsv = currentLedsHsv[currentIndex];
-//			if(hsv.v > 220){
-//				hsv.v = hsv.v -1;
-//			}else{
-//				hsv.v =(hsv.v * 95) / 100;
-//			}
-//
-//		}
+		if(hsv.v < 50){
+			hsv.v = 50;
+		}
 		hsv.h = 255 - (255 * i / 13);
 		setLedHsv(currentIndex, hsv);
-		hsv.v = hsv.v >> 1;
 		setLedHsv(currentIndex-1, hsv);
 		setLedHsv(currentIndex+1, hsv);
 		hsv.v = hsv.v >> 1;
 		setLedHsv(currentIndex-2, hsv);
 		setLedHsv(currentIndex+2, hsv);
+		hsv.v = hsv.v >> 1;
+		setLedHsv(currentIndex-3, hsv);
+		setLedHsv(currentIndex+3, hsv);
 	}
 }
 
@@ -181,4 +193,8 @@ void spectrumBrightness(uint32_t counter){
 	readMsgeq07(spectrumBrightnessCallback);
 }
 
+
+void secondTrySpectrum(uint32_t counter){
+
+}
 
