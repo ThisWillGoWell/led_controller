@@ -21,7 +21,11 @@ void setLed(uint32_t i,uint8_t r, uint8_t g, uint8_t b);
 typedef void (*msgeq07_callback)(uint32_t spectrum[]);
 void readMsgeq07(msgeq07_callback);
 
+uint8_t* getMode();
 
-
+uint32_t get_rand_uint32();
+uint32_t get_rand_uint32_range(uint32_t start, uint32_t end);
+uint8_t get_rand_uint8();
+uint32_t get_rand_uint8_range(uint8_t start, uint8_t end);
 
 #endif /* PERFS_H_ */

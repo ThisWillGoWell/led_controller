@@ -17,8 +17,8 @@
 	typedef struct Pattern
 	{
 		uint32_t defaultMsDealy;
-		uint32_t counter;
 		PatternFunc func;
 	} Pattern;
+
 
 #endif /* PATTERN_H_ */

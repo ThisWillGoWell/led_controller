@@ -30,8 +30,7 @@ void initPins(){
                   | SIM_SOPT5_UART0TXSRC(SOPT5_UART0TXSRC_UART_TX));
 }
 
-int main(void){
-	initPins();
+int main(void){	initPins();
     BOARD_BootClockRUN();
     BOARD_InitDebugConsole();
     initPerfs();

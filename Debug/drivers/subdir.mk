@@ -16,7 +16,9 @@ C_SRCS += \
 ../drivers/fsl_ftfx_flash.c \
 ../drivers/fsl_ftfx_flexnvm.c \
 ../drivers/fsl_gpio.c \
+../drivers/fsl_i2c.c \
 ../drivers/fsl_lpuart.c \
+../drivers/fsl_rnga.c \
 ../drivers/fsl_smc.c \
 ../drivers/fsl_tpm.c \
 ../drivers/fsl_uart.c 
@@ -34,7 +36,9 @@ OBJS += \
 ./drivers/fsl_ftfx_flash.o \
 ./drivers/fsl_ftfx_flexnvm.o \
 ./drivers/fsl_gpio.o \
+./drivers/fsl_i2c.o \
 ./drivers/fsl_lpuart.o \
+./drivers/fsl_rnga.o \
 ./drivers/fsl_smc.o \
 ./drivers/fsl_tpm.o \
 ./drivers/fsl_uart.o 
@@ -52,7 +56,9 @@ C_DEPS += \
 ./drivers/fsl_ftfx_flash.d \
 ./drivers/fsl_ftfx_flexnvm.d \
 ./drivers/fsl_gpio.d \
+./drivers/fsl_i2c.d \
 ./drivers/fsl_lpuart.d \
+./drivers/fsl_rnga.d \
 ./drivers/fsl_smc.d \
 ./drivers/fsl_tpm.d \
 ./drivers/fsl_uart.d 

@@ -26,8 +26,8 @@
 #include "fsl_dspi.h"
 #include "pin_mux.h"
 #include "fsl_debug_console.h"
-
-
+#include "fsl_i2c.h"
+#include "fsl_rnga.h"
 /*******************************************************************************
  *
  *
@@ -335,26 +335,49 @@ void initDspi(void){
 
 }
 
-void setLed(uint32_t i,uint8_t r, uint8_t g, uint8_t b){
+// Power Calculations
+#define mA 1000 // 1000 us
+#define Amp 1000000
+#define BASE_LED_COST = 1000 // 1 mA, 1000uA when the lds are off to power
+#define BASE_CURRENT = NUM_LEDS * BASE_LED_COST
 
+#define UA_PER_LED = 4531;
+
+uint32_t currentPower;
+
+
+void set_led_strip(uint8_t *leds, int index,  uint8_t r, uint8_t g, uint8_t b){
+
+	currentPower -= leds[index+1];
+	currentPower -= leds[index+2];
+	currentPower -= leds[index+3];
+
+	leds[index + 1] =  b;
+	leds[index + 2] = g;
+	leds[index + 3] = r;
+
+	currentPower += r;
+	currentPower += g;
+	currentPower += b;
+}
+
+
+void setLed(uint32_t i,uint8_t r, uint8_t g, uint8_t b){
 	int index = 4 + (i % NUM_LEDS_PER_BUS) * 4;
 	switch(i / NUM_LEDS_PER_BUS){
 	case 0:
-		leds0[index + 1] =  b;
-		leds0[index + 2] = g;
-		leds0[index + 3] = r;
+		set_led_strip(&leds0, index, r,g,b);
 		break;
 	case 1:
-		leds1[index + 1] = b;
-		leds1[index + 2] = g;
-		leds1[index + 3] = r;
+		set_led_strip(&leds1, index, r,g,b);
 		break;
 	case 2:
-		leds2[index + 1] = b;
-		leds2[index + 2] = g;
-		leds2[index + 3] = r;
+		set_led_strip(&leds2, index, r,g,b);
+		break;
 	}
 }
+
+
 
 
 
@@ -595,6 +618,220 @@ void setResetPin(uint8_t onOff){
 }
 
 
+/*******************************************************************************
+ * i2c
+ ******************************************************************************/
+
+
+
+#define I2C_SLAVE_BASEADDR I2C0
+#define I2C_SLAVE_CLK_SRC I2C0_CLK_SRC
+#define I2C_SLAVE_CLK_FREQ CLOCK_GetFreq(I2C0_CLK_SRC)
+#define I2C_MASTER_SLAVE_ADDR_7BIT 0x20U
+
+uint8_t emptyData;
+
+#define MODE_ADDRESS 0x01
+#define MODE_DATA_SIZE 1
+uint8_t mode_data[1] = {0};
+
+#define CURRENT_POWER_ADDRESS 0x02
+uint8_t currentPowerData[4] = {0};
+
+uint8_t* getMode(){
+	return &mode_data;
+}
+
+
+i2c_slave_handle_t g_s_handle;
+volatile bool g_SlaveCompletionFlag = false;
+uint8_t address_selected;
+uint8_t current_address;
+
+void update_slave_xfer( i2c_slave_transfer_t *xfer, int write ){
+	switch(current_address){
+	case MODE_ADDRESS:
+		xfer->data = &mode_data;
+		xfer->dataSize = MODE_DATA_SIZE;
+		break;
+	case CURRENT_POWER_ADDRESS:
+		if(!write){
+			xfer->data = &currentPower;
+			xfer->dataSize = 4;
+		} else{
+			emptyData = 0;
+			xfer->data = &emptyData;
+			xfer->dataSize = 1;
+		}
+		break;
+	default:
+		emptyData =0;
+		xfer->data = &emptyData;
+		xfer->dataSize = 1;
+	}
+
+}
+
+
+static void i2c_slave_callback(I2C_Type *base, i2c_slave_transfer_t *xfer, void *userData)
+{
+    switch (xfer->event)
+    {
+        /*  Address match event */
+        case kI2C_SlaveAddressMatchEvent:
+            xfer->data = NULL;
+            xfer->dataSize = 0;
+        	address_selected = 0;
+            break;
+        /*  Transmit request */
+        case kI2C_SlaveTransmitEvent:
+            /*  Update information for transmit process */
+            update_slave_xfer(xfer, 0);
+            break;
+
+        /*  Receive request */
+        case kI2C_SlaveReceiveEvent:
+//        	PRINTF("sr");
+            /*  Update information for received process */
+        	if(address_selected){
+        		update_slave_xfer(xfer, 1);
+        	} else {
+        		xfer-> data = &current_address;
+        		xfer->dataSize = 1;
+        		address_selected = 1;
+        	}
+            break;
+
+        /*  Transfer done */
+        case kI2C_SlaveCompletionEvent:
+
+            xfer->data = NULL;
+            xfer->dataSize = 0;
+
+            if(!address_selected){
+            	g_SlaveCompletionFlag = true;
+            }
+            break;
+        default:
+        	break;
+    }
+}
+
+
+void initI2cPins(){
+	/* Port B Clock Gate Control: Clock enabled */
+	CLOCK_EnableClock(kCLOCK_PortB);
+
+	const port_pin_config_t portb2_pinG12_config = {/* Internal pull-up resistor is enabled */
+													kPORT_PullUp,
+													/* Fast slew rate is configured */
+													kPORT_FastSlewRate,
+													/* Passive filter is disabled */
+													kPORT_PassiveFilterDisable,
+													/* Open drain is enabled */
+													kPORT_OpenDrainEnable,
+													/* Low drive strength is configured */
+													kPORT_LowDriveStrength,
+													/* Pin is configured as I2C0_SCL */
+													kPORT_MuxAlt2,
+													/* Pin Control Register fields [15:0] are not locked */
+													kPORT_UnlockRegister};
+	/* PORTB2 (pin G12) is configured as I2C0_SCL */
+	PORT_SetPinConfig(PORTB, 2U, &portb2_pinG12_config);
+
+	const port_pin_config_t portb3_pinG11_config = {/* Internal pull-up resistor is enabled */
+													kPORT_PullUp,
+													/* Fast slew rate is configured */
+													kPORT_FastSlewRate,
+													/* Passive filter is disabled */
+													kPORT_PassiveFilterDisable,
+													/* Open drain is enabled */
+													kPORT_OpenDrainEnable,
+													/* Low drive strength is configured */
+													kPORT_LowDriveStrength,
+													/* Pin is configured as I2C0_SDA */
+													kPORT_MuxAlt2,
+													/* Pin Control Register fields [15:0] are not locked */
+													kPORT_UnlockRegister};
+	/* PORTB3 (pin G11) is configured as I2C0_SDA */
+	PORT_SetPinConfig(PORTB, 3U, &portb3_pinG11_config);
+
+}
+
+void initI2c(){
+	initI2cPins();
+	i2c_slave_config_t slaveConfig;
+
+	 I2C_SlaveGetDefaultConfig(&slaveConfig);
+
+	slaveConfig.addressingMode = kI2C_Address7bit;
+	slaveConfig.slaveAddress = I2C_MASTER_SLAVE_ADDR_7BIT;
+	slaveConfig.upperAddress = 0; /*  not used for this example */
+
+	I2C_SlaveInit(I2C_SLAVE_BASEADDR, &slaveConfig, I2C_SLAVE_CLK_FREQ);
+	I2C_SlaveTransferCreateHandle(I2C_SLAVE_BASEADDR, &g_s_handle, i2c_slave_callback, NULL);
+
+	/* Set up slave transfer. */
+	I2C_SlaveTransferNonBlocking(I2C_SLAVE_BASEADDR, &g_s_handle,
+								 kI2C_SlaveCompletionEvent | kI2C_SlaveAddressMatchEvent);
+
+}
+
+
+
+/*******************************************************************************
+ * rand
+ ******************************************************************************/
+
+uint32_t data[1] = {};
+status_t status;
+void initRgna(){
+    RNGA_Init(RNG);
+}
+
+
+uint32_t get_rand_uint32(){
+	status = RNGA_GetRandomData(RNG, data, 1);
+	if (status == kStatus_Success)
+	{
+		return data[0];
+	}
+	else
+	{
+		PRINTF("RNGA failed!\r\n");
+	}
+	return 0;
+}
+
+uint8_t get_rand_uint8(){
+	status = RNGA_GetRandomData(RNG, data, 1);
+	if (status == kStatus_Success)
+	{
+		return 0x000000FF & data[0];
+	}
+	else
+	{
+		PRINTF("RNGA failed!\r\n");
+	}
+	return 0;
+}
+
+// end is exclusive
+uint32_t get_rand_uint32_range(uint32_t start, uint32_t end){
+	return (get_rand_uint32() % (end - start)) + start;
+}
+
+uint32_t get_rand_uint8_range(uint8_t start, uint8_t end){
+	return (get_rand_uint8() % (end - start)) + start;
+}
+
+
+
+/*******************************************************************************
+ *
+ ******************************************************************************/
+
+
 
 void initPerfs(){
 	initDspi();
@@ -603,6 +840,9 @@ void initPerfs(){
 	initMsgeq07Timer();
 	initMsgeq07Adc();
 	initMsgEq07Pins();
+
+	initI2c();
+	initRgna();
 
 	// set the global brightness of each bus
 	for(int i=0;i<NUM_LEDS_PER_BUS;i++){

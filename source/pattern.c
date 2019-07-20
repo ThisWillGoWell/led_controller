@@ -33,6 +33,11 @@ void fade(uint32_t count );
 void randomLight(uint32_t count);
 void spectrumBrightness(uint32_t counter);
 void secondTrySpectrum(uint32_t counter);
+void sparkelPattern(uint32_t counter);
+void fadeOff(uint32_t counter);
+void brightnessTestPattern(uint32_t counter);
+
+void fade_all_and_set(uint8_t amount);
 
 uint32_t currentDelay;
 uint8_t brightness;
@@ -92,7 +97,8 @@ void setLedHsv(uint32_t i, HsvColor c){
 }
 void setLedRgb(uint32_t i, RgbColor c){
 	currentLedsRgb[i]  = c;
-	setLed(i, gamma[c.r], gamma[c.g], gamma[c.b]);
+	//setLed(i, gamma[c.r], gamma[c.g], gamma[c.b]);
+	setLed(i, c.r, c.g, c.b);
 }
 
 
@@ -100,11 +106,66 @@ void initPatterns(){
 	SysTick_Config(SystemCoreClock / 1000U);
 
 }
+/*
+ *       off_mode_num = 0
+        rainbow_mode_num = 1
+        sparkle_mode_num = 2
+        theater_mode_num = 3
+        aux_mode_num = 4
+        mic_mode_num = 5
+        test_brightness_mode_num = 6
+        test_color_mode_num = 7
+        test_write_speed = 8
+ */
+
+// Patterns
+#define num_patterns 9
+PatternFunc patterns[] = {
+		brightnessTestPattern,
+		rainbowPattern,
+		sparkelPattern,
+		fadeOff,
+		spectrumBrightness,
+		fadeOff,
+		brightnessTestPattern,
+		fadeOff,
+		fadeOff,
+};
+
+RgbColor brightness_currentRgb;
+void brightnessTestPattern(uint32_t counter){
+	int i;
+
+	brightness_currentRgb.r = counter % 256;
+	brightness_currentRgb.g = counter % 256;
+	brightness_currentRgb.b = counter % 256;
+
+	for(int i=0;i<NUM_LEDS;i++){
+		setLedRgb(i, brightness_currentRgb);
+	}
+
+	if(counter % 20 == 0 || counter % 255 == 0){
+		for(i =0; i< 10000000; i++){
+
+		}
+			i = 0;
+	}
+
+}
+
+
+
+void fadeOff(uint32_t counter){
+	if(counter % 20 == 0){
+		fade_all_and_set(1);
+	}
+}
 
 void runPatterns(){
+	uint8_t *mode = getMode();
 	while(1){
 		//rainbowPattern(clockCounter);
-		spectrumBrightness(clockCounter);
+		patterns[bound_uint8(*mode, 0, num_patterns-1)](clockCounter);
 		SysTick_DelayTicks(10U); //delay 10 ms
 		clockCounter += 1;
 	}
@@ -122,6 +183,32 @@ void rainbowPattern( uint32_t count){
 		hsv.h += 5 % 255;
 	}
 }
+
+void fade_all_and_set(uint8_t amount){
+	for(int i=0; i<NUM_LEDS; i++){
+		if(amount >= currentLedsHsv[i].v){
+			 currentLedsHsv[i].v = 0;
+		}else{
+			 currentLedsHsv[i].v -= amount;
+		}
+		setLedHsv(i, currentLedsHsv[i]);
+	}
+}
+
+
+HsvColor sparkle_currentHsv = {0, 255, 0};
+void sparkelPattern(uint32_t counter){
+	for(int i=0; i < (counter % 10); i++){
+		sparkle_currentHsv.v = get_rand_uint8_range(100, 200);
+		sparkle_currentHsv.h = get_rand_uint8_range(0, 255);
+
+		setLedHsv(get_rand_uint32_range(0, NUM_LEDS), sparkle_currentHsv);
+	}
+	fade_all_and_set(5);
+}
+
+
+
 
 uint32_t currentSpectrum[7] = {0};
 uint32_t enhansedSpectrum[13] = {0};
@@ -160,7 +247,7 @@ void spectrumBrightnessCallback(uint32_t spectrum[]){
 			// current specturm = current specturm [99-90]%
 			// the higher the number, the slower the decay
 			if(currentEnhansedSpectrum[i] != 0){
-				decay = (currentEnhansedSpectrum[i] * (100 - map_uint32(currentEnhansedSpectrum[i], 0, 4096, 30, 100))) / 1000;
+				decay = (currentEnhansedSpectrum[i] * (100 - map_uint32(currentEnhansedSpectrum[i], 0, 4096, 50, 100))) / 1000;
 				if(decay > currentEnhansedSpectrum[i]){
 					currentEnhansedSpectrum[i] = 0;
 				}else{
@@ -171,21 +258,22 @@ void spectrumBrightnessCallback(uint32_t spectrum[]){
 		}
 		//hsv.v = currentEnhansedSpectrum[i] >> 4U;
 
-		currentIndex = 100 + i * 7 + 2;
+		currentIndex = 5 + i*2;
 		hsv.v = currentEnhansedSpectrum[i] >> 4U; // spectrum is 0-4095, so to map it to 0-255 shift it over 4 (divide by 16)
-		if(hsv.v < 50){
-			hsv.v = 50;
-		}
+//		if(hsv.v < 50){
+//			hsv.v = 50;
+//		}
 		hsv.h = 255 - (255 * i / 13);
 		setLedHsv(currentIndex, hsv);
-		setLedHsv(currentIndex-1, hsv);
-		setLedHsv(currentIndex+1, hsv);
-		hsv.v = hsv.v >> 1;
-		setLedHsv(currentIndex-2, hsv);
-		setLedHsv(currentIndex+2, hsv);
-		hsv.v = hsv.v >> 1;
-		setLedHsv(currentIndex-3, hsv);
-		setLedHsv(currentIndex+3, hsv);
+//		hsv.v = hsv.v >> 1;
+//		setLedHsv(currentIndex-1, hsv);
+//		setLedHsv(currentIndex+1, hsv);
+
+//		setLedHsv(currentIndex-2, hsv);
+//		setLedHsv(currentIndex+2, hsv);
+//		hsv.v = hsv.v >> 1;
+//		setLedHsv(currentIndex-3, hsv);
+//		setLedHsv(currentIndex+3, hsv);
 	}
 }
 
@@ -197,4 +285,9 @@ void spectrumBrightness(uint32_t counter){
 void secondTrySpectrum(uint32_t counter){
 
 }
+
+
+
+
+
 
