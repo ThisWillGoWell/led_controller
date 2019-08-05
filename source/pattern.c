@@ -121,7 +121,7 @@ void initPatterns(){
 // Patterns
 #define num_patterns 9
 PatternFunc patterns[] = {
-		brightnessTestPattern,
+		rainbowPattern,
 		rainbowPattern,
 		sparkelPattern,
 		fadeOff,
@@ -176,9 +176,9 @@ void runPatterns(){
 
 void rainbowPattern( uint32_t count){
 	hsv.h = count % 255;
-	hsv.v = 100;
+	hsv.v = 50;
 	hsv.s = 255;
-	for(int i=0;i<NUM_LEDS;i++){
+	for(int i=0;i<(68*7) ;i++){
 		setLedHsv(i, hsv);
 		hsv.h += 5 % 255;
 	}
@@ -231,9 +231,9 @@ void spectrumBrightnessCallback(uint32_t spectrum[]){
 			spectrumBuffer[currentBufferIndex] [i] = 0;
 		}
 		enhansedSpectrum[i*2]= spectrumBuffer[currentBufferIndex] [i];
-		enhansedSpectrum[i*2+1] = spectrumBuffer[currentBufferIndex] [i]/2 ;
+		//enhansedSpectrum[i*2+1] = spectrumBuffer[currentBufferIndex] [i]/2 ;
 		if(i != 0){
-			enhansedSpectrum[i*2-1] += spectrumBuffer[currentBufferIndex] [i]/2;
+			//enhansedSpectrum[i*2-1] += spectrumBuffer[currentBufferIndex] [i]/2;
 		}
 		spectrumBuffer[currentBufferIndex][i] = spectrum[i];
 	}
@@ -247,7 +247,7 @@ void spectrumBrightnessCallback(uint32_t spectrum[]){
 			// current specturm = current specturm [99-90]%
 			// the higher the number, the slower the decay
 			if(currentEnhansedSpectrum[i] != 0){
-				decay = (currentEnhansedSpectrum[i] * (100 - map_uint32(currentEnhansedSpectrum[i], 0, 4096, 50, 100))) / 1000;
+				decay = (currentEnhansedSpectrum[i] * (120 - map_uint32(currentEnhansedSpectrum[i], 0, 4096, 20, 120))) / 1000;
 				if(decay > currentEnhansedSpectrum[i]){
 					currentEnhansedSpectrum[i] = 0;
 				}else{
@@ -258,17 +258,17 @@ void spectrumBrightnessCallback(uint32_t spectrum[]){
 		}
 		//hsv.v = currentEnhansedSpectrum[i] >> 4U;
 
-		currentIndex = 5 + i*2;
+		currentIndex = 4 + i*5;
 		hsv.v = currentEnhansedSpectrum[i] >> 4U; // spectrum is 0-4095, so to map it to 0-255 shift it over 4 (divide by 16)
 //		if(hsv.v < 50){
 //			hsv.v = 50;
 //		}
 		hsv.h = 255 - (255 * i / 13);
 		setLedHsv(currentIndex, hsv);
-//		hsv.v = hsv.v >> 1;
-//		setLedHsv(currentIndex-1, hsv);
-//		setLedHsv(currentIndex+1, hsv);
-
+		hsv.v = hsv.v >> 1;
+		setLedHsv(currentIndex-1, hsv);
+		setLedHsv(currentIndex+1, hsv);
+//		hsv.v = hsv.v >> 2;
 //		setLedHsv(currentIndex-2, hsv);
 //		setLedHsv(currentIndex+2, hsv);
 //		hsv.v = hsv.v >> 1;
