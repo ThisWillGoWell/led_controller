@@ -422,7 +422,8 @@ void setLed(uint32_t i,uint8_t r, uint8_t g, uint8_t b){
  ******************************************************************************/
 #define ADC16_BASE ADC1
 #define ADC16_CHANNEL_GROUP 0U
-#define ADC16_USER_CHANNEL 18U
+#define ADC16_USER_CHANNEL 23U // left (tip of aux)
+#define ADC16_CHANNEL_2 18U // right
 
 #define ADC16_IRQn ADC1_IRQn
 #define ADC16_IRQ_HANDLER_FUNC ADC1_IRQHandler
@@ -449,7 +450,7 @@ void setLed(uint32_t i,uint8_t r, uint8_t g, uint8_t b){
 #define OUTPUT_SETTLE_US 36U
 #define RESET_PULSE_WIDTH_US 100U
 #define STROBE_TO_STROBE_US 72U
-
+#define NUM_ACD_READS 14
 /************************
  * MSGEQQ07 Read State Machine
  ************************/
@@ -457,6 +458,8 @@ void setLed(uint32_t i,uint8_t r, uint8_t g, uint8_t b){
 #define STROBE_HIGH_STATE 1
 #define STROBE_LOW_STATE 2
 #define STROBE_OUTPUT_SETTLE 3
+#define READ_CHANNEL_1 4
+#define READ_CHANNEL_2 5
 
 /*******************************************************************************
  * Prototypes
@@ -470,21 +473,33 @@ void setNextTimerInterrupt(uint32_t);
 /*******************************************************************************
  * Variables
  ******************************************************************************/
-adc16_channel_config_t adc16ChannelConfigStruct;
+adc16_channel_config_t adc16Channel1ConfigStruct;
+adc16_channel_config_t adc16Channel2ConfigStruct;
 uint8_t state;
-uint32_t spectrum[7] = {0};
+uint32_t spectrum[NUM_ACD_READS] = {0};
 uint8_t currentRead = 0;
 msgeq07_callback current_callback;
 void ADC16_IRQ_HANDLER_FUNC(void)
 {
 	/* Read conversion result to clear the conversion completed flag. */
 	spectrum[currentRead] = ADC16_GetChannelConversionValue(ADC16_BASE, ADC16_CHANNEL_GROUP);
-	setStrobePin(1);
 
-	if (currentRead != 6) {
+	if (state == READ_CHANNEL_2){
+		setStrobePin(1);
+	}
+
+	if (currentRead != NUM_ACD_READS -1 ) {
 		currentRead += 1;
-		state = STROBE_HIGH_STATE;
-		setNextTimerInterrupt(STROBE_TO_STROBE_US);
+		if(state == READ_CHANNEL_1) {
+			state = READ_CHANNEL_2;
+			ADC16_SetChannelConfig(ADC16_BASE, ADC16_CHANNEL_GROUP, &adc16Channel2ConfigStruct);
+		}else {
+
+			state = STROBE_HIGH_STATE;
+			setNextTimerInterrupt(STROBE_TO_STROBE_US);
+		}
+
+
 	} else{
 		currentRead = 0;
 		current_callback(spectrum);
@@ -508,8 +523,10 @@ void BOARD_TPM_HANDLER(void)
     	setNextTimerInterrupt(OUTPUT_SETTLE_US);
     	break;
     case OUTPUT_SETTLE_US:
+    	state = READ_CHANNEL_1;
     	// trigger a read
-    	ADC16_SetChannelConfig(ADC16_BASE, ADC16_CHANNEL_GROUP, &adc16ChannelConfigStruct);
+    	ADC16_SetChannelConfig(ADC16_BASE, ADC16_CHANNEL_GROUP, &adc16Channel1ConfigStruct);
+
     	break;
     }
     /* Clear interrupt flag.*/
@@ -571,12 +588,9 @@ void initMsgeq07Adc(){
 
 	EnableIRQ(ADC16_IRQn);
 	ADC16_GetDefaultConfig(&adc16ConfigStruct);
-#ifdef BOARD_ADC_USE_ALT_VREF
-	adc16ConfigStruct.referenceVoltageSource = kADC16_ReferenceVoltageSourceValt;
-#endif
 	ADC16_Init(ADC16_BASE, &adc16ConfigStruct);
 	ADC16_EnableHardwareTrigger(ADC16_BASE, false); /* Make sure the software trigger is used. */
-#if defined(FSL_FEATURE_ADC16_HAS_CALIBRATION) && FSL_FEATURE_ADC16_HAS_CALIBRATION
+
 	if (kStatus_Success == ADC16_DoAutoCalibration(ADC16_BASE))
 	{
 		PRINTF("ADC16_DoAutoCalibration() Done.\r\n");
@@ -585,12 +599,15 @@ void initMsgeq07Adc(){
 	{
 		PRINTF("ADC16_DoAutoCalibration() Failed.\r\n");
 	}
-#endif /* FSL_FEATURE_ADC16_HAS_CALIBRATION */
-	adc16ChannelConfigStruct.channelNumber = ADC16_USER_CHANNEL;
-	adc16ChannelConfigStruct.enableInterruptOnConversionCompleted = true; /* Enable the interrupt. */
-#if defined(FSL_FEATURE_ADC16_HAS_DIFF_MODE) && FSL_FEATURE_ADC16_HAS_DIFF_MODE
-	adc16ChannelConfigStruct.enableDifferentialConversion = false;
-#endif /* FSL_FEATURE_ADC16_HAS_DIFF_MODE */
+
+	adc16Channel1ConfigStruct.channelNumber = ADC16_USER_CHANNEL;
+	adc16Channel1ConfigStruct.enableInterruptOnConversionCompleted = true; /* Enable the interrupt. */
+	adc16Channel1ConfigStruct.enableDifferentialConversion = false;
+
+	adc16Channel2ConfigStruct.channelNumber = ADC16_CHANNEL_2;
+	adc16Channel2ConfigStruct.enableInterruptOnConversionCompleted = true; /* Enable the interrupt. */
+	adc16Channel2ConfigStruct.enableDifferentialConversion = false;
+
 
 }
 
@@ -790,6 +807,17 @@ void initRgna(){
 }
 
 
+//uint32_t populateRandomArary(void data, size_t size, uint32_t minValue,  uint32_t maxValue){
+//	status = RNGA_GetRandomData(RNG, data, size);
+//	if (status != kStatus_Success)
+//	{
+//		PRINTF("RNGA failed!\r\n");
+//	}
+//	for(int i=0;i<size;i++){
+//		data[i] = data[i] % (maxValue -  minValue) + minValue;
+//	}
+//}
+
 uint32_t get_rand_uint32(){
 	status = RNGA_GetRandomData(RNG, data, 1);
 	if (status == kStatus_Success)
@@ -798,8 +826,7 @@ uint32_t get_rand_uint32(){
 	}
 	else
 	{
-		PRINTF("RNGA failed!\r\n");
-	}
+
 	return 0;
 }
 
