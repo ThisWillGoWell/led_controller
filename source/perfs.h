@@ -27,5 +27,7 @@ uint32_t get_rand_uint32();
 uint32_t get_rand_uint32_range(uint32_t start, uint32_t end);
 uint8_t get_rand_uint8();
 uint32_t get_rand_uint8_range(uint8_t start, uint8_t end);
+void populateRandomArary(void *data, size_t size, uint32_t minValue,  uint32_t maxValue);
+
 
 #endif /* PERFS_H_ */

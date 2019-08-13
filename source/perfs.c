@@ -807,7 +807,7 @@ void initRgna(){
 }
 
 
-//uint32_t populateRandomArary(void data, size_t size, uint32_t minValue,  uint32_t maxValue){
+//void populateRandomArary(void *data, size_t size, uint32_t minValue,  uint32_t maxValue){
 //	status = RNGA_GetRandomData(RNG, data, size);
 //	if (status != kStatus_Success)
 //	{
@@ -827,6 +827,7 @@ uint32_t get_rand_uint32(){
 	else
 	{
 
+	}
 	return 0;
 }
 

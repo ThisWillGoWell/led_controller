@@ -141,7 +141,7 @@ void initPatterns(){
 // Patterns
 #define num_patterns 9
 PatternFunc patterns[] = {
-		monoVuMeter,
+		rainbowPattern,
 		rainbowPattern,
 		sparkelPattern,
 		fadeOff,
@@ -337,18 +337,17 @@ void monoVuMeter(uint32_t counter){
 }
 
 
-//
-//#define UPPER_THREASHOLD 1000
-//#define LOWER_THREASHOLD 500 // same as noise floor
-//
-//#define LEDS_PER_BAND 10
-//// state machine
-//#define SPECTRUM_POP_STATE_IDLE 0
-//#define SPECTRUM_POP_STATE_ACTIVE_LOW 1
-//#define SPECTRUM_POP_STATE_ACTIVE_HIGH 2
-//#define NEW_LEDS 3
-//
-//uint8_t sepctrumPopStates[14] = SPECTRUM_PROCESSOR_STATE_IDLE; // one state for each band
+
+#define UPPER_THREASHOLD 1000
+#define LOWER_THREASHOLD 500 // same as noise floor
+
+#define LEDS_PER_BAND 10
+// two state machine
+#define SPECTRUM_POP_STATE_ACTIVE_LOW 1
+#define SPECTRUM_POP_STATE_ACTIVE_HIGH 2
+#define NEW_LEDS 3
+
+//uint8_t sepctrumPopStates[14] = {SPECTRUM_PROCESSOR_STATE_IDLE}; // one state for each band
 //uint32_t spectrumPopLeds[14][LEDS_PER_BAND] = {0}; // place to store the leds currenly being tracked
 //HsvColor spectrumPopHsv[14];
 //
@@ -362,16 +361,16 @@ void monoVuMeter(uint32_t counter){
 //
 //void spectrumPopCallback(uint32_t spectrum[]){
 //	for(int i=0;i<14;i++){
-//		if(spectrum[i] > UPPER_THREASHOLD && state == SPECTRUM_POP_STATE_ACTIVE_LOW){
+//		if( sepctrumPopSta esstate == SPECTRUM_POP_STATE_ACTIVE_LOW && spectrum[i] > UPPER_THREASHOLD){
 //			state = SPECTRUM_POP_STATE_ACTIVE_HIGH;
-//		} else if(sepctrum[i] < LOWER_THREASHOLD && state == SPECTRUM_POP_STATE_ACTIVE_HIGH){
+//		} else if( state == SPECTRUM_POP_STATE_ACTIVE_HIGH && sepctrum[i] < LOWER_THREASHOLD){
 //			// pick new leds
-//
+//			populdateRandomArray(spectrumPopLeds[i], LEDS_PER_BAND, 0, NUM_LEDS);
+//			state = SPECTRUM_POP_STATE_ACTIVE_LOW;
 //		}
-//
 //		for(int j=0;j<LEDS_PER_BAND;j++){
 //			spectrumPopHsv[i].v = map_uint32(spectrum[freq], 500, 4096, 0, 255);
-//			//setLedHsv(-1, spectrumPopLeds[i][j], )
+//			setLedHsv(-1, spectrumPopLeds[i][j], spectrumPopHsv[i]);
 //		}
 //	}
 //}
@@ -379,7 +378,7 @@ void monoVuMeter(uint32_t counter){
 //void spectrumPop(uint32_t spectrum[]){
 //
 //}
-//
+
 
 
 ////	int i;
